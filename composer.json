@@ -1,41 +1,50 @@
 {
-  "name": "polyskalov/botman-viber-driver",
-  "license": "MIT",
-  "description": "Viber driver for BotMan",
-  "keywords": [
-    "Bot",
-    "BotMan",
-    "Viber",
-    "Messenger"
-  ],
-  "homepage": "https://github.com/polyskalov/botman-viber-driver",
-  "authors": [
-    {
-      "name": "Oleksii Yaryi",
-      "email": "oleksii.yaryi@gmail.com"
+    "name": "polyskalov/botman-viber-driver",
+    "license": "MIT",
+    "description": "Viber driver for BotMan",
+    "keywords": [
+        "Bot",
+        "BotMan",
+        "Viber",
+        "Messenger"
+    ],
+    "homepage": "https://github.com/polyskalov/botman-viber-driver",
+    "authors": [
+        {
+            "name": "Oleksii Yaryi",
+            "email": "oleksii.yaryi@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.0",
+        "botman/botman": "~2.0",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "botman/studio-addons": "~1.0",
+        "illuminate/contracts": "~5.5.0",
+        "phpunit/phpunit": "~5.0",
+        "ext-curl": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "TheArdent\\Drivers\\Viber\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "cs": "php-cs-fixer fix"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "TheArdent\\Drivers\\Viber\\Providers\\ViberServiceProvider"
+            ]
+        }
     }
-  ],
-  "require": {
-    "php": ">=7.0",
-    "botman/botman": "*"
-  },
-  "require-dev": {
-    "phpunit/phpunit": "~5.0",
-    "mockery/mockery": "dev-master",
-    "ext-curl": "*"
-  },
-  "autoload": {
-    "psr-4": {
-      "TheArdent\\Drivers\\Viber\\": "src/"
-    }
-  },
-  "autoload-dev": {
-    "psr-4": {
-      "Tests\\": "tests/"
-    }
-  },
-  "scripts": {
-    "test": "vendor/bin/phpunit",
-    "cs": "php-cs-fixer fix"
-  }
 }
