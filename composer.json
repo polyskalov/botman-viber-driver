@@ -43,7 +43,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "TheArdent\\Drivers\\Viber\\Providers\\ViberServiceProvider"
+                "\\TheArdent\\Drivers\\Viber\\Providers\\ViberServiceProvider"
             ]
         }
     }

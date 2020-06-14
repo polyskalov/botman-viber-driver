@@ -61,3 +61,28 @@ You can read about other fields in the request in the [official documentation](h
 Instead of manually sending the request to Viber you can use a console command to register your Webhook.
 
 ``` php artisan botman:viber:register```
+
+## Example
+```php
+<?php
+
+/** @var \BotMan\BotMan\BotMan $botman */
+$botman = resolve('botman');
+
+$botman->on(
+    'conversation_started',
+    static function (array $payload, BotMan $bot) {
+        $bot->reply('Hi, ' . $bot->getUser()->getUsername());
+    }
+);
+
+$botman->hears('hi', static function (BotMan $bot) {
+    $bot->reply('👋');
+});
+
+$botman->fallback(static function (BotMan $bot) {
+    $bot->reply('I do not understand');
+});
+
+$botman->listen();
+```
