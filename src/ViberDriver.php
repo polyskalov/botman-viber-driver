@@ -2,8 +2,8 @@
 
 namespace TheArdent\Drivers\Viber;
 
+use JsonSerializable;
 use BotMan\BotMan\Interfaces\DriverEventInterface;
-use BotMan\BotMan\Users\User;
 use Illuminate\Support\Collection;
 use BotMan\BotMan\Drivers\HttpDriver;
 use BotMan\BotMan\Messages\Incoming\Answer;
@@ -25,20 +25,21 @@ use TheArdent\Drivers\Viber\Events\MessageStarted;
 use TheArdent\Drivers\Viber\Events\UserSubscribed;
 use TheArdent\Drivers\Viber\Events\UserUnsubscribed;
 use TheArdent\Drivers\Viber\Events\Webhook;
-use TheArdent\Drivers\Viber\Extensions\ContactTemplate;
+use TheArdent\Drivers\Viber\Exceptions\ViberException;
+use TheArdent\Drivers\Viber\Extensions\AccountInfo;
 use TheArdent\Drivers\Viber\Extensions\FileTemplate;
 use TheArdent\Drivers\Viber\Extensions\KeyboardTemplate;
-use TheArdent\Drivers\Viber\Extensions\LinkTemplate;
 use TheArdent\Drivers\Viber\Extensions\LocationTemplate;
 use TheArdent\Drivers\Viber\Extensions\PictureTemplate;
+use TheArdent\Drivers\Viber\Extensions\User;
 use TheArdent\Drivers\Viber\Extensions\VideoTemplate;
 
 class ViberDriver extends HttpDriver
 {
-    const DRIVER_NAME = 'Viber';
+    public const DRIVER_NAME = 'Viber';
 
-    const API_ENDPOINT = 'https://chatapi.viber.com/pa/';
-    
+    public const API_ENDPOINT = 'https://chatapi.viber.com/pa/';
+
     /** @var string */
     protected $signature;
 
@@ -52,22 +53,21 @@ class ViberDriver extends HttpDriver
     private $bot;
 
     /**
-     * @param Request $request
+     * @param  Request  $request
      */
-    public function buildPayload(Request $request)
+    public function buildPayload(Request $request): void
     {
-
-        $this->payload = new ParameterBag((array)json_decode($request->getContent(), true));
+        $this->payload = new ParameterBag(json_decode($request->getContent(), true));
         $this->content = $request->getContent();
-        $this->event = Collection::make($this->payload->get('event'), []);
+        $this->event = Collection::make($this->payload->get('event'));
         $this->signature = $request->headers->get('X-Viber-Content-Signature', '');
-        $this->config = Collection::make($this->config->get('viber'), []);
+        $this->config = Collection::make($this->config->get('viber'));
     }
 
     /**
      * @return array
      */
-    protected function getHeaders()
+    protected function getHeaders(): array
     {
         return [
             'Accept:application/json',
@@ -81,7 +81,7 @@ class ViberDriver extends HttpDriver
      *
      * @return bool
      */
-    public function matchesRequest()
+    public function matchesRequest(): bool
     {
         return $this->payload->get('event') && $this->payload->get('message_token');
     }
@@ -100,7 +100,7 @@ class ViberDriver extends HttpDriver
     }
 
     /**
-     * @param array $eventData
+     * @param  array  $eventData
      *
      * @return bool|DriverEventInterface
      */
@@ -135,11 +135,11 @@ class ViberDriver extends HttpDriver
     }
 
     /**
-     * @param \BotMan\BotMan\Messages\Incoming\IncomingMessage $message
+     * @param  IncomingMessage  $message
      *
      * @return Answer
      */
-    public function getConversationAnswer(IncomingMessage $message)
+    public function getConversationAnswer(IncomingMessage $message): Answer
     {
         $text = $message->getText();
         return Answer::create($text)->setMessage($message)
@@ -150,17 +150,26 @@ class ViberDriver extends HttpDriver
      * Retrieve the chat message.
      *
      * @return array
+     * @throws ViberException
      */
-    public function getMessages()
+    public function getMessages(): array
     {
-        $user = $this->payload->get('sender') ? $this->payload->get('sender')['id'] : ($this->payload->get('user')['id'] ?? null);
+        if (!$this->isConfigured()) {
+            return [];
+        }
+
+        $user = $this->payload->get('sender') ? $this->payload->get('sender')['id'] : ($this->payload->get(
+                'user'
+            )['id'] ?? null);
         if ($user === null) {
             return [];
         }
         if (isset($this->payload->get('message')['text'])) {
-            $message = new IncomingMessage($this->payload->get('message')['text'], $user, $this->getBotId(),
-                $this->payload);
-        } elseif ($this->payload->get('message')['type'] == 'location') {
+            $message = new IncomingMessage(
+                $this->payload->get('message')['text'], $user, $this->getBotId(),
+                $this->payload
+            );
+        } elseif ($this->payload->get('message') && $this->payload->get('message')['type'] === 'location') {
             $message = new IncomingMessage(Location::PATTERN, $user, $this->getBotId(), $this->payload);
             $message->setLocation(
                 new Location(
@@ -179,11 +188,11 @@ class ViberDriver extends HttpDriver
     /**
      * Convert a Question object
      *
-     * @param Question $question
+     * @param  Question  $question
      *
      * @return array
      */
-    protected function convertQuestion(Question $question)
+    protected function convertQuestion(Question $question): array
     {
         $actions = $question->getActions();
         if (count($actions) > 0) {
@@ -192,8 +201,8 @@ class ViberDriver extends HttpDriver
                 $text = $action['text'];
                 $actionType = $action['additional']['url'] ? 'open-url' : 'reply';
                 $actionBody = $action['additional']['url'] ?? $action['value'] ?? $action['text'];
-                $silent = $action['additional']['url'] ? true : false;
-                $keyboard->addButton($text, $actionType, $actionBody,'regular', null, 6, $silent);
+                $silent = isset($action['additional']['url']);
+                $keyboard->addButton($text, $actionType, $actionBody, 'regular', null, 6, $silent);
             }
             return $keyboard->jsonSerialize();
         }
@@ -204,7 +213,7 @@ class ViberDriver extends HttpDriver
         ];
     }
 
-    public function requestContactKeyboard($buttonText)
+    public function requestContactKeyboard($buttonText): array
     {
         $keyboard = new KeyboardTemplate($buttonText);
         $keyboard->addButton($buttonText, 'share-phone', 'reply');
@@ -213,17 +222,20 @@ class ViberDriver extends HttpDriver
     }
 
     /**
-     * @param string|Question|IncomingMessage                  $message
-     * @param \BotMan\BotMan\Messages\Incoming\IncomingMessage $matchingMessage
-     * @param array                                            $additionalParameters
+     * @param  string|Question|IncomingMessage  $message
+     * @param  IncomingMessage  $matchingMessage
+     * @param  array  $additionalParameters
      *
      * @return array
      */
-    public function buildServicePayload($message, $matchingMessage, $additionalParameters = [])
+    public function buildServicePayload($message, $matchingMessage, $additionalParameters = []): array
     {
-        $parameters = array_merge_recursive([
-            'receiver' => $matchingMessage->getSender(),
-        ], $additionalParameters);
+        $parameters = array_merge_recursive(
+            [
+                'receiver' => $matchingMessage->getSender(),
+            ],
+            $additionalParameters
+        );
 
         if ($message instanceof Question) {
             $parameters = array_merge_recursive($this->convertQuestion($message), $parameters);
@@ -231,17 +243,21 @@ class ViberDriver extends HttpDriver
             $attachment = $message->getAttachment();
             if (!is_null($attachment)) {
                 $attachmentType = strtolower(basename(str_replace('\\', '/', get_class($attachment))));
-                if ($attachmentType == 'image' && $attachment instanceof Image) {
+                if ($attachmentType === 'image' && $attachment instanceof Image) {
                     $template = new PictureTemplate($attachment->getUrl(), $attachment->getTitle());
-                } elseif ($attachmentType == 'video' && $attachment instanceof Video) {
+                } elseif ($attachmentType === 'video' && $attachment instanceof Video) {
                     $template = new VideoTemplate($attachment->getUrl());
-                } elseif ($attachmentType == 'audio' && $attachment instanceof Audio) {
-                    $template = new FileTemplate($attachment->getUrl(),
-                        uniqid() . ($ext = pathinfo($attachment->getUrl(), PATHINFO_EXTENSION)) ? '.' . $ext : '');
-                } elseif ($attachmentType == 'file' && $attachment instanceof File) {
-                    $template = new FileTemplate($attachment->getUrl(),
-                        uniqid() . ($ext = pathinfo($attachment->getUrl(), PATHINFO_EXTENSION)) ? '.' . $ext : '');
-                } elseif ($attachmentType == 'location' && $attachment instanceof Location) {
+                } elseif (
+                    ($attachmentType === 'audio' && $attachment instanceof Audio)
+                    || ($attachmentType === 'file' && $attachment instanceof File)
+                ) {
+                    $ext = pathinfo($attachment->getUrl(), PATHINFO_EXTENSION);
+                    $template = new FileTemplate(
+                        $attachment->getUrl(),
+                        uniqid('', true)
+                        . ($ext ? '.' . $ext : '')
+                    );
+                } elseif ($attachmentType === 'location' && $attachment instanceof Location) {
                     $template = new LocationTemplate($attachment->getLatitude(), $attachment->getLongitude());
                 }
 
@@ -252,7 +268,7 @@ class ViberDriver extends HttpDriver
                 $parameters['text'] = $message->getText();
                 $parameters['type'] = 'text';
             }
-        } elseif ($message instanceof \JsonSerializable) {
+        } elseif ($message instanceof JsonSerializable) {
             $parameters = array_merge($message->jsonSerialize(), $parameters);
         } else {
             $parameters['text'] = $message->getText();
@@ -263,71 +279,116 @@ class ViberDriver extends HttpDriver
     }
 
     /**
-     * @param mixed $payload
+     * @param  mixed  $payload
      *
      * @return Response
      */
-    public function sendPayload($payload)
+    public function sendPayload($payload): Response
     {
-        return $this->http->post(self::API_ENDPOINT . 'send_message', [], $payload, $this->getHeaders(), true);
+        return $this->http->post(
+            self::API_ENDPOINT . 'send_message',
+            [],
+            $payload,
+            $this->getHeaders(),
+            true
+        );
     }
 
     /**
      * @return bool
      */
-    public function isConfigured()
+    public function isConfigured(): bool
     {
-        return !is_null($this->config->get('token'));
+        return $this->config->get('token') !== null;
     }
 
     /**
      * Retrieve User information.
      *
-     * @param \BotMan\BotMan\Messages\Incoming\IncomingMessage $matchingMessage
+     * @param  IncomingMessage  $matchingMessage
      *
      * @return User
      */
-    public function getUser(IncomingMessage $matchingMessage)
+    public function getUser(IncomingMessage $matchingMessage): User
     {
         $personId = $matchingMessage->getSender();
         /** @var ParameterBag $payload */
         $payload = $matchingMessage->getPayload();
-        $name = $payload->get('sender')['name'];
-        list($firstName, $lastName) = explode(' ', trim($name), 2);
-        /*$response = $this->http->post(self::API_ENDPOINT . 'get_user_details', [], ['id' => $personId],
-            $this->getHeaders());
-        $userInfo = Collection::make(json_decode($response->getContent(), true)['user']);*/
 
-        return new User($personId, $firstName, $lastName, $name, $payload->all());
+        $user = null;
+
+        $response = $this->sendRequest(
+            self::API_ENDPOINT . 'get_user_details',
+            ['id' => $personId],
+            $matchingMessage
+        );
+        $responseData = json_decode($response->getContent(), true);
+
+        if (($responseData['status'] ?? null) === 0 && ($responseData['user'] ?? null)) {
+            $user = $responseData['user'];
+        } else {
+            $user = $payload->get('user');
+        }
+
+        $name = $user['name'] ?? '';
+        $nameArray = explode(' ', trim($name), 2);
+
+        return new User(
+            $personId,
+            $nameArray[0] ?? '',
+            $nameArray[1] ?? '',
+            $name,
+            $user
+        );
     }
 
 
     /**
      * Low-level method to perform driver specific API requests.
      *
-     * @param string          $endpoint
-     * @param array           $parameters
-     * @param IncomingMessage $matchingMessage
+     * @param  string  $endpoint
+     * @param  array  $parameters
+     * @param  IncomingMessage  $matchingMessage
      *
      * @return Response
      */
-    public function sendRequest($endpoint, array $parameters, IncomingMessage $matchingMessage)
+    public function sendRequest($endpoint, array $parameters, IncomingMessage $matchingMessage): Response
     {
         return $this->http->post(self::API_ENDPOINT . $endpoint, [], $parameters, $this->getHeaders());
+    }
+
+    /**
+     * Fetch the account’s details as registered in Viber
+     * The account admin will be able to edit most of these details from his Viber client.
+     * @throws ViberException
+     */
+    public function getAccountInfo(): AccountInfo
+    {
+        $response = $this->http->post(
+            self::API_ENDPOINT . 'get_account_info',
+            [],
+            [],
+            $this->getHeaders()
+        );
+        $responseData = json_decode($response->getContent(), true);
+
+        if ((int) $responseData['status'] !== 0) {
+            throw new ViberException($responseData['status_message'], $responseData['status']);
+        }
+        return new AccountInfo($responseData);
     }
 
     /**
      * Returns the chatbot ID.
      *
      * @return string
+     * @throws ViberException
      */
-    private function getBotId()
+    private function getBotId(): string
     {
-        if (is_null($this->bot)) {
-            $response = $this->http->post(self::API_ENDPOINT . 'get_account_info', [], [], $this->getHeaders());
-            $bot = json_decode($response->getContent());
-            $this->bot = $bot;
-            $this->botId = $bot->id;
+        if ($this->bot === null) {
+            $this->bot = $this->getAccountInfo();
+            $this->botId = $this->bot->getId();
         }
 
         return $this->botId;
