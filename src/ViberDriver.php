@@ -2,6 +2,7 @@
 
 namespace TheArdent\Drivers\Viber;
 
+use GuzzleHttp\Client;
 use JsonSerializable;
 use BotMan\BotMan\Interfaces\DriverEventInterface;
 use Illuminate\Support\Collection;
@@ -317,12 +318,18 @@ class ViberDriver extends HttpDriver
 
         $user = null;
 
-        $response = $this->sendRequest(
-            self::API_ENDPOINT . 'get_user_details',
-            ['id' => $personId],
-            $matchingMessage
-        );
-        $responseData = json_decode($response->getContent(), true);
+        $client = new Client();
+
+        $response = $client->request('POST',self::API_ENDPOINT . 'get_user_details', [
+            'headers' => [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'X-Viber-Auth-Token' => $this->config->get('token'),
+            ],
+            'json' => ['id' => $personId]
+        ]);
+
+        $responseData = json_decode($response->getBody()->getContents(), true);
 
         if (($responseData['status'] ?? null) === 0 && ($responseData['user'] ?? null)) {
             $user = $responseData['user'];
@@ -338,7 +345,7 @@ class ViberDriver extends HttpDriver
             $nameArray[0] ?? '',
             $nameArray[1] ?? '',
             $name,
-            $user
+            $responseData
         );
     }
 
