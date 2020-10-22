@@ -200,8 +200,8 @@ class ViberDriver extends HttpDriver
             $keyboard = new KeyboardTemplate($question->getText());
             foreach ($actions as $action) {
                 $text = $action['text'];
-                $actionType = $action['additional']['url'] ? 'open-url' : 'reply';
-                $actionBody = $action['additional']['url'] ?? $action['value'] ?? $action['text'];
+                $actionType = optional($action['additional'])['url'] ? 'open-url' : 'reply';
+                $actionBody = optional($action['additional'])['url'] ?? $action['value'] ?? $action['text'];
                 $silent = isset($action['additional']['url']);
                 $keyboard->addButton($text, $actionType, $actionBody, 'regular', null, 6, $silent);
             }
