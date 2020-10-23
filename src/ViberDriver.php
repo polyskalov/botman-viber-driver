@@ -245,7 +245,7 @@ class ViberDriver extends HttpDriver
             if (!is_null($attachment)) {
                 $attachmentType = strtolower(basename(str_replace('\\', '/', get_class($attachment))));
                 if ($attachmentType === 'image' && $attachment instanceof Image) {
-                    $template = new PictureTemplate($attachment->getUrl(), $attachment->getTitle());
+                    $template = new PictureTemplate($attachment->getUrl(), $message->getText());
                 } elseif ($attachmentType === 'video' && $attachment instanceof Video) {
                     $template = new VideoTemplate($attachment->getUrl());
                 } elseif (
@@ -265,6 +265,8 @@ class ViberDriver extends HttpDriver
                 if (isset($template)) {
                     $parameters = array_merge($template->jsonSerialize(), $parameters);
                 }
+            } elseif (array_key_exists('driver_type',$additionalParameters) && $additionalParameters['driver_type'] == 'carousel') {
+                unset($parameters['text']);
             } else {
                 $parameters['text'] = $message->getText();
                 $parameters['type'] = 'text';
