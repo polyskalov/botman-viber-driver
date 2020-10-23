@@ -1,5 +1,5 @@
 {
-    "name": "polyskalov/botman-viber-driver",
+    "name": "yaroslav-kozhemiaka/botman-viber-driver",
     "license": "MIT",
     "description": "Viber driver for BotMan",
     "keywords": [
@@ -8,11 +8,10 @@
         "Viber",
         "Messenger"
     ],
-    "homepage": "https://github.com/polyskalov/botman-viber-driver",
     "authors": [
         {
-            "name": "Oleksii Yaryi",
-            "email": "oleksii.yaryi@gmail.com"
+            "name": "Yaroslav Kozhemiaka",
+            "email": "jaroslav.kozhemiaka@gmail.com"
         }
     ],
     "require": {

@@ -2,6 +2,7 @@
 
 namespace TheArdent\Drivers\Viber;
 
+use GuzzleHttp\Client;
 use JsonSerializable;
 use BotMan\BotMan\Interfaces\DriverEventInterface;
 use Illuminate\Support\Collection;
@@ -199,8 +200,8 @@ class ViberDriver extends HttpDriver
             $keyboard = new KeyboardTemplate($question->getText());
             foreach ($actions as $action) {
                 $text = $action['text'];
-                $actionType = $action['additional']['url'] ? 'open-url' : 'reply';
-                $actionBody = $action['additional']['url'] ?? $action['value'] ?? $action['text'];
+                $actionType = optional($action['additional'])['url'] ? 'open-url' : 'reply';
+                $actionBody = optional($action['additional'])['url'] ?? $action['value'] ?? $action['text'];
                 $silent = isset($action['additional']['url']);
                 $keyboard->addButton($text, $actionType, $actionBody, 'regular', null, 6, $silent);
             }
@@ -244,7 +245,7 @@ class ViberDriver extends HttpDriver
             if (!is_null($attachment)) {
                 $attachmentType = strtolower(basename(str_replace('\\', '/', get_class($attachment))));
                 if ($attachmentType === 'image' && $attachment instanceof Image) {
-                    $template = new PictureTemplate($attachment->getUrl(), $attachment->getTitle());
+                    $template = new PictureTemplate($attachment->getUrl(), $message->getText());
                 } elseif ($attachmentType === 'video' && $attachment instanceof Video) {
                     $template = new VideoTemplate($attachment->getUrl());
                 } elseif (
@@ -264,6 +265,8 @@ class ViberDriver extends HttpDriver
                 if (isset($template)) {
                     $parameters = array_merge($template->jsonSerialize(), $parameters);
                 }
+            } elseif (array_key_exists('driver_type',$additionalParameters) && $additionalParameters['driver_type'] == 'carousel') {
+                unset($parameters['text']);
             } else {
                 $parameters['text'] = $message->getText();
                 $parameters['type'] = 'text';
@@ -317,12 +320,18 @@ class ViberDriver extends HttpDriver
 
         $user = null;
 
-        $response = $this->sendRequest(
-            self::API_ENDPOINT . 'get_user_details',
-            ['id' => $personId],
-            $matchingMessage
-        );
-        $responseData = json_decode($response->getContent(), true);
+        $client = new Client();
+
+        $response = $client->request('POST',self::API_ENDPOINT . 'get_user_details', [
+            'headers' => [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'X-Viber-Auth-Token' => $this->config->get('token'),
+            ],
+            'json' => ['id' => $personId]
+        ]);
+
+        $responseData = json_decode($response->getBody()->getContents(), true);
 
         if (($responseData['status'] ?? null) === 0 && ($responseData['user'] ?? null)) {
             $user = $responseData['user'];
@@ -338,7 +347,7 @@ class ViberDriver extends HttpDriver
             $nameArray[0] ?? '',
             $nameArray[1] ?? '',
             $name,
-            $user
+            $responseData
         );
     }
 
